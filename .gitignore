@@ -1,0 +1,36 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyTorch Checkpoints and model weights
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+
+# TensorBoard & Experiment runs
+runs/
+*.tfevents*
+
+# Logs & Simulation outputs
+*.log
+combined_output.txt
+combined_output_ppo.txt
+sumo_warnings.txt
+debug_output.txt
+eval_output*.txt
+
+# Evaluation artifacts
+eval_results/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Editor & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
