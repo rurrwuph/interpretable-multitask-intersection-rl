@@ -41,64 +41,24 @@ vehicles.add(
 )
 
 
-def _build_scenario_inflows(scenario_name: str) -> InFlows:
-    scenario_inflow = InFlows()
-    rates = SCENARIO_INFLOW_RATES.get(
-        scenario_name, SCENARIO_INFLOW_RATES["scenario_a"]
-    )
-    for arm, rate in rates.items():
-        scenario_inflow.add(
-            veh_type="human",
-            edge=arm,
-            vehs_per_hour=rate,
-            depart_speed=10,
-            depart_lane="free",
-        )
-    return scenario_inflow
 
-
-DEFAULT_SCENARIO = "scenario_b"
-inflow = _build_scenario_inflows(DEFAULT_SCENARIO)
-
-
-def build_net_params(scenario_name=DEFAULT_SCENARIO, inflows=None):
-    if scenario_name not in SCENARIO_CONFIGS:
-        raise KeyError(
-            f"Unknown scenario '{scenario_name}'. Available scenarios:"
-            f" {list(SCENARIO_CONFIGS.keys())}"
-        )
-
-    assigned_inflows = (
-        inflows if inflows is not None else _build_scenario_inflows(scenario_name)
-    )
-
-    net_params = NetParams(
-        inflows=assigned_inflows,
-        additional_params=SCENARIO_CONFIGS[scenario_name],
-    )
-
-    return net_params
-
-
-net_params = build_net_params(DEFAULT_SCENARIO)
-
-initialConfig = InitialConfig(
-    spacing="random",
-    perturbation=1,
-)
-
-sumoParams = SumoParams(
-    sim_step=0.1,
-    render=False,
-    restart_instance=True,
-)
-
-ADDITIONAL_ENV_PARAMS = {
-    "action_set": [0, 3, 6, 9],
-}
-
-envParams = EnvParams(
-    horizon=1000,
-    additional_params=ADDITIONAL_ENV_PARAMS,
-    sims_per_step=1,
-)
+# initial_test_veh_type_0 = 'veh_0'
+# initial_test_veh_type_1 = 'veh_1'
+# initial_test_veh_type_2 = 'veh_2'
+# initial_test_veh_type_3 = 'veh_3'
+# initial_test_veh_type_4 = 'veh_4'
+# initial_test_veh_type_5 = 'veh_5'
+# initial_test_veh_type_6 = 'veh_6'
+# initial_test_veh_type_7 = 'veh_7'
+# initial_test_veh_type_8 = 'veh_8'
+# initial_test_veh_type_9 = 'veh_9'
+# initial_test_veh_type_10 = 'veh_10'
+# initial_test_veh_type_11 = 'veh_11'
+# initial_test_veh_type_12 = 'veh_12'
+# initial_test_veh_type_13 = 'veh_13'
+# initial_test_veh_type_14 = 'veh_14'
+# initial_test_veh_type_15 = 'veh_15'
+# initial_test_veh_type_16 = 'veh_16'
+# initial_test_veh_type_17 = 'veh_17'
+# initial_test_veh_type_18 = 'veh_18'
+# initial_test_veh_type_19 = 'veh_19'
