@@ -280,3 +280,4 @@ class UnsignalizedIntersectionNetwork(Network):
     # Routes
     # ------------------------------------------------------------------
     
+# sumo approach edge length set to 100m
