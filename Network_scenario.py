@@ -57,29 +57,48 @@ def _build_scenario_inflows(scenario_name: str) -> InFlows:
     return scenario_inflow
 
 
+DEFAULT_SCENARIO = "scenario_b"
+inflow = _build_scenario_inflows(DEFAULT_SCENARIO)
 
-# inflow_rate_candidate_0 = 200
-# inflow_rate_candidate_1 = 215
-# inflow_rate_candidate_2 = 230
-# inflow_rate_candidate_3 = 245
-# inflow_rate_candidate_4 = 260
-# inflow_rate_candidate_5 = 275
-# inflow_rate_candidate_6 = 290
-# inflow_rate_candidate_7 = 305
-# inflow_rate_candidate_8 = 320
-# inflow_rate_candidate_9 = 335
-# inflow_rate_candidate_10 = 350
-# inflow_rate_candidate_11 = 365
-# inflow_rate_candidate_12 = 380
-# inflow_rate_candidate_13 = 395
-# inflow_rate_candidate_14 = 410
-# inflow_rate_candidate_15 = 425
-# inflow_rate_candidate_16 = 440
-# inflow_rate_candidate_17 = 455
-# inflow_rate_candidate_18 = 470
-# inflow_rate_candidate_19 = 485
-# inflow_rate_candidate_20 = 500
-# inflow_rate_candidate_21 = 515
-# inflow_rate_candidate_22 = 530
-# inflow_rate_candidate_23 = 545
-# inflow_rate_candidate_24 = 560
+
+def build_net_params(scenario_name=DEFAULT_SCENARIO, inflows=None):
+    if scenario_name not in SCENARIO_CONFIGS:
+        raise KeyError(
+            f"Unknown scenario '{scenario_name}'. Available scenarios:"
+            f" {list(SCENARIO_CONFIGS.keys())}"
+        )
+
+    assigned_inflows = (
+        inflows if inflows is not None else _build_scenario_inflows(scenario_name)
+    )
+
+    net_params = NetParams(
+        inflows=assigned_inflows,
+        additional_params=SCENARIO_CONFIGS[scenario_name],
+    )
+
+    return net_params
+
+
+net_params = build_net_params(DEFAULT_SCENARIO)
+
+initialConfig = InitialConfig(
+    spacing="random",
+    perturbation=1,
+)
+
+sumoParams = SumoParams(
+    sim_step=0.1,
+    render=False,
+    restart_instance=True,
+)
+
+ADDITIONAL_ENV_PARAMS = {
+    "action_set": [0, 3, 6, 9],
+}
+
+envParams = EnvParams(
+    horizon=1000,
+    additional_params=ADDITIONAL_ENV_PARAMS,
+    sims_per_step=1,
+)
