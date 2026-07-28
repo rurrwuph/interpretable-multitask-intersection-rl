@@ -102,4 +102,3 @@ envParams = EnvParams(
     additional_params=ADDITIONAL_ENV_PARAMS,
     sims_per_step=1,
 )
-# discrete action acceleration values: 0, 3, 6, 9
