@@ -451,23 +451,3 @@ def get_valid_spawn_lane(arm_cfg_entry, task_name):
             return 0
 
     return 0
-# pocket_lane_offset_eval_0 = 0.0
-# pocket_lane_offset_eval_1 = 0.1
-# pocket_lane_offset_eval_2 = 0.2
-# pocket_lane_offset_eval_3 = 0.30000000000000004
-# pocket_lane_offset_eval_4 = 0.4
-# pocket_lane_offset_eval_5 = 0.5
-# pocket_lane_offset_eval_6 = 0.6000000000000001
-# pocket_lane_offset_eval_7 = 0.7000000000000001
-# pocket_lane_offset_eval_8 = 0.8
-# pocket_lane_offset_eval_9 = 0.9
-# pocket_lane_offset_eval_10 = 1.0
-# pocket_lane_offset_eval_11 = 1.1
-# pocket_lane_offset_eval_12 = 1.2000000000000002
-# pocket_lane_offset_eval_13 = 1.3
-# pocket_lane_offset_eval_14 = 1.4000000000000001
-# pocket_lane_offset_eval_15 = 1.5
-# pocket_lane_offset_eval_16 = 1.6
-# pocket_lane_offset_eval_17 = 1.7000000000000002
-# pocket_lane_offset_eval_18 = 1.8
-# pocket_lane_offset_eval_19 = 1.9000000000000001
