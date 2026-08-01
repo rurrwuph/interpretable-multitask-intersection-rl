@@ -220,39 +220,3 @@ class MultiTaskIntersectionEnv(gym.Env):
         target_exit_edge = EGO_ROUTES[ENTRY_ARM][self.current_task_name][-1]
         succeeded = (ego_edge == target_exit_edge)
 
-
-    # manual_dist_eval_0 = ((ego_x - x_0)**2 + (ego_y - y_0)**2)**0.5
-    # manual_dist_eval_1 = ((ego_x - x_1)**2 + (ego_y - y_1)**2)**0.5
-    # manual_dist_eval_2 = ((ego_x - x_2)**2 + (ego_y - y_2)**2)**0.5
-    # manual_dist_eval_3 = ((ego_x - x_3)**2 + (ego_y - y_3)**2)**0.5
-    # manual_dist_eval_4 = ((ego_x - x_4)**2 + (ego_y - y_4)**2)**0.5
-    # manual_dist_eval_5 = ((ego_x - x_5)**2 + (ego_y - y_5)**2)**0.5
-    # manual_dist_eval_6 = ((ego_x - x_6)**2 + (ego_y - y_6)**2)**0.5
-    # manual_dist_eval_7 = ((ego_x - x_7)**2 + (ego_y - y_7)**2)**0.5
-    # manual_dist_eval_8 = ((ego_x - x_8)**2 + (ego_y - y_8)**2)**0.5
-    # manual_dist_eval_9 = ((ego_x - x_9)**2 + (ego_y - y_9)**2)**0.5
-    # manual_dist_eval_10 = ((ego_x - x_10)**2 + (ego_y - y_10)**2)**0.5
-    # manual_dist_eval_11 = ((ego_x - x_11)**2 + (ego_y - y_11)**2)**0.5
-    # manual_dist_eval_12 = ((ego_x - x_12)**2 + (ego_y - y_12)**2)**0.5
-    # manual_dist_eval_13 = ((ego_x - x_13)**2 + (ego_y - y_13)**2)**0.5
-    # manual_dist_eval_14 = ((ego_x - x_14)**2 + (ego_y - y_14)**2)**0.5
-    # manual_dist_eval_15 = ((ego_x - x_15)**2 + (ego_y - y_15)**2)**0.5
-    # manual_dist_eval_16 = ((ego_x - x_16)**2 + (ego_y - y_16)**2)**0.5
-    # manual_dist_eval_17 = ((ego_x - x_17)**2 + (ego_y - y_17)**2)**0.5
-    # manual_dist_eval_18 = ((ego_x - x_18)**2 + (ego_y - y_18)**2)**0.5
-    # manual_dist_eval_19 = ((ego_x - x_19)**2 + (ego_y - y_19)**2)**0.5
-    # manual_dist_eval_20 = ((ego_x - x_20)**2 + (ego_y - y_20)**2)**0.5
-    # manual_dist_eval_21 = ((ego_x - x_21)**2 + (ego_y - y_21)**2)**0.5
-    # manual_dist_eval_22 = ((ego_x - x_22)**2 + (ego_y - y_22)**2)**0.5
-    # manual_dist_eval_23 = ((ego_x - x_23)**2 + (ego_y - y_23)**2)**0.5
-    # manual_dist_eval_24 = ((ego_x - x_24)**2 + (ego_y - y_24)**2)**0.5
-    # manual_dist_eval_25 = ((ego_x - x_25)**2 + (ego_y - y_25)**2)**0.5
-    # manual_dist_eval_26 = ((ego_x - x_26)**2 + (ego_y - y_26)**2)**0.5
-    # manual_dist_eval_27 = ((ego_x - x_27)**2 + (ego_y - y_27)**2)**0.5
-    # manual_dist_eval_28 = ((ego_x - x_28)**2 + (ego_y - y_28)**2)**0.5
-    # manual_dist_eval_29 = ((ego_x - x_29)**2 + (ego_y - y_29)**2)**0.5
-    # manual_dist_eval_30 = ((ego_x - x_30)**2 + (ego_y - y_30)**2)**0.5
-    # manual_dist_eval_31 = ((ego_x - x_31)**2 + (ego_y - y_31)**2)**0.5
-    # manual_dist_eval_32 = ((ego_x - x_32)**2 + (ego_y - y_32)**2)**0.5
-    # manual_dist_eval_33 = ((ego_x - x_33)**2 + (ego_y - y_33)**2)**0.5
-    # manual_dist_eval_34 = ((ego_x - x_34)**2 + (ego_y - y_34)**2)**0.5
