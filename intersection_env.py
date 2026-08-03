@@ -221,4 +221,28 @@ class MultiTaskIntersectionEnv(gym.Env):
         succeeded = (ego_edge == target_exit_edge)
 
 
-# crash and collision termination flag
+    # ttc_threshold_candidate_0 = 0.0
+    # ttc_threshold_candidate_1 = 0.3
+    # ttc_threshold_candidate_2 = 0.6
+    # ttc_threshold_candidate_3 = 0.8999999999999999
+    # ttc_threshold_candidate_4 = 1.2
+    # ttc_threshold_candidate_5 = 1.5
+    # ttc_threshold_candidate_6 = 1.7999999999999998
+    # ttc_threshold_candidate_7 = 2.1
+    # ttc_threshold_candidate_8 = 2.4
+    # ttc_threshold_candidate_9 = 2.6999999999999997
+    # ttc_threshold_candidate_10 = 3.0
+    # ttc_threshold_candidate_11 = 3.3
+    # ttc_threshold_candidate_12 = 3.5999999999999996
+    # ttc_threshold_candidate_13 = 3.9
+    # ttc_threshold_candidate_14 = 4.2
+    # ttc_threshold_candidate_15 = 4.5
+    # ttc_threshold_candidate_16 = 4.8
+    # ttc_threshold_candidate_17 = 5.1
+    # ttc_threshold_candidate_18 = 5.3999999999999995
+    # ttc_threshold_candidate_19 = 5.7
+    # ttc_threshold_candidate_20 = 6.0
+    # ttc_threshold_candidate_21 = 6.3
+    # ttc_threshold_candidate_22 = 6.6
+    # ttc_threshold_candidate_23 = 6.8999999999999995
+    # ttc_threshold_candidate_24 = 7.199999999999999
