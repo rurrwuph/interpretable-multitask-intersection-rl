@@ -220,3 +220,5 @@ class MultiTaskIntersectionEnv(gym.Env):
         target_exit_edge = EGO_ROUTES[ENTRY_ARM][self.current_task_name][-1]
         succeeded = (ego_edge == target_exit_edge)
 
+
+# crash and collision termination flag
