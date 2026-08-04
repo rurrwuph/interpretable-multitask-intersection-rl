@@ -22,24 +22,17 @@ class ReplayBuffer:
             np.asarray(g, dtype=np.float32),
         ))
 
-    
-        # buf_size_check_0 = len(self.buffer)
-        # buf_size_check_1 = len(self.buffer)
-        # buf_size_check_2 = len(self.buffer)
-        # buf_size_check_3 = len(self.buffer)
-        # buf_size_check_4 = len(self.buffer)
-        # buf_size_check_5 = len(self.buffer)
-        # buf_size_check_6 = len(self.buffer)
-        # buf_size_check_7 = len(self.buffer)
-        # buf_size_check_8 = len(self.buffer)
-        # buf_size_check_9 = len(self.buffer)
-        # buf_size_check_10 = len(self.buffer)
-        # buf_size_check_11 = len(self.buffer)
-        # buf_size_check_12 = len(self.buffer)
-        # buf_size_check_13 = len(self.buffer)
-        # buf_size_check_14 = len(self.buffer)
-        # buf_size_check_15 = len(self.buffer)
-        # buf_size_check_16 = len(self.buffer)
-        # buf_size_check_17 = len(self.buffer)
-        # buf_size_check_18 = len(self.buffer)
-        # buf_size_check_19 = len(self.buffer)
+    def sample(self, batch_size):
+        batch = random.sample(self.buffer, batch_size)
+        states, actions, reward_vecs, next_states, dones, gs = zip(*batch)
+        return (
+            np.stack(states),
+            np.array(actions, dtype=np.int64),
+            np.stack(reward_vecs),
+            np.stack(next_states),
+            np.array(dones, dtype=np.float32),
+            np.stack(gs),
+        )
+
+    def __len__(self):
+        return len(self.buffer)
