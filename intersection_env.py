@@ -220,29 +220,114 @@ class MultiTaskIntersectionEnv(gym.Env):
         target_exit_edge = EGO_ROUTES[ENTRY_ARM][self.current_task_name][-1]
         succeeded = (ego_edge == target_exit_edge)
 
+        r_ls = self._subtask_reward(self.active_g[0], collided, succeeded)
+        r_ss = self._subtask_reward(self.active_g[1], collided, succeeded)
+        r_rs = self._subtask_reward(self.active_g[2], collided, succeeded)
+        r_cs = -0.15
 
-    # ttc_threshold_candidate_0 = 0.0
-    # ttc_threshold_candidate_1 = 0.3
-    # ttc_threshold_candidate_2 = 0.6
-    # ttc_threshold_candidate_3 = 0.8999999999999999
-    # ttc_threshold_candidate_4 = 1.2
-    # ttc_threshold_candidate_5 = 1.5
-    # ttc_threshold_candidate_6 = 1.7999999999999998
-    # ttc_threshold_candidate_7 = 2.1
-    # ttc_threshold_candidate_8 = 2.4
-    # ttc_threshold_candidate_9 = 2.6999999999999997
-    # ttc_threshold_candidate_10 = 3.0
-    # ttc_threshold_candidate_11 = 3.3
-    # ttc_threshold_candidate_12 = 3.5999999999999996
-    # ttc_threshold_candidate_13 = 3.9
-    # ttc_threshold_candidate_14 = 4.2
-    # ttc_threshold_candidate_15 = 4.5
-    # ttc_threshold_candidate_16 = 4.8
-    # ttc_threshold_candidate_17 = 5.1
-    # ttc_threshold_candidate_18 = 5.3999999999999995
-    # ttc_threshold_candidate_19 = 5.7
-    # ttc_threshold_candidate_20 = 6.0
-    # ttc_threshold_candidate_21 = 6.3
-    # ttc_threshold_candidate_22 = 6.6
-    # ttc_threshold_candidate_23 = 6.8999999999999995
-    # ttc_threshold_candidate_24 = 7.199999999999999
+        vectorized_reward = np.array([r_ls, r_ss, r_rs, r_cs], dtype=np.float32)
+        scalar_reward = float(np.dot(self.active_g, vectorized_reward))
+
+        terminated = bool(collided or succeeded)
+        truncated = bool(
+            self.flow_env.step_counter >= self.flow_env.env_params.horizon
+        )
+
+        obs = self._get_observation()
+        info = {
+            "vectorized_reward": vectorized_reward,
+            "task_g": self.active_g,
+            "is_success": succeeded,
+            "is_collision": collided,
+            "collision_type": collision_type,
+            "edge": ego_edge,
+        }
+
+        return obs, scalar_reward, terminated, truncated, info
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+    def _subtask_reward(self, is_active, collided, succeeded):
+        if not is_active:
+            return 0.0
+        if collided:
+            return -500.0
+        if succeeded:
+            return 50.0
+        return 0.0
+
+    def _get_observation(self):
+        all_veh_ids = self.flow_env.k.vehicle.get_ids()
+        ego_present = (self._current_ego_id is not None) and (self._current_ego_id in all_veh_ids)
+
+        ego_pos = np.array([0.0, 0.0], dtype=np.float32)
+        ego_speed = 0.0
+        ego_angle = 0.0
+
+        if ego_present:
+            try:
+                raw_pos = self.flow_env.k.vehicle.get_position(self._current_ego_id)
+                if raw_pos is not None and len(raw_pos) >= 2:
+                    ego_pos = np.array(raw_pos[:2], dtype=np.float32)
+
+                ego_speed = float(self.flow_env.k.vehicle.get_speed(self._current_ego_id))
+                ego_angle = float(
+                    self.flow_env.k.vehicle.kernel_api.vehicle.getAngle(self._current_ego_id)
+                )
+            except Exception:
+                ego_present = False
+
+        ego_state = [max(0.0, ego_speed)]
+
+        social_ids = [
+            v for v in all_veh_ids
+            if v.startswith("human") or v.startswith("flow")
+        ]
+        social_features = []
+
+        if len(social_ids) > 0 and ego_present:
+            distances = []
+            for s_id in social_ids:
+                try:
+                    s_raw_pos = self.flow_env.k.vehicle.get_position(s_id)
+                    if s_raw_pos is None or len(s_raw_pos) < 2:
+                        continue
+                    s_pos = np.array(s_raw_pos[:2], dtype=np.float32)
+                    dist = float(np.linalg.norm(s_pos - ego_pos))
+                    distances.append((dist, s_id, s_pos))
+                except Exception:
+                    continue
+
+            distances.sort(key=lambda x: x[0])
+            nearest = distances[: self.k_nearest]
+
+            ego_rad = np.radians(ego_angle)
+
+            for dist, s_id, s_pos in nearest:
+                try:
+                    s_speed = float(self.flow_env.k.vehicle.get_speed(s_id))
+                    s_angle = float(
+                        self.flow_env.k.vehicle.kernel_api.vehicle.getAngle(s_id)
+                    )
+                except Exception:
+                    s_speed = 0.0
+                    s_angle = ego_angle
+
+                dx = float(s_pos[0] - ego_pos[0])
+                dy = float(s_pos[1] - ego_pos[1])
+
+                x_body = dx * np.sin(ego_rad) + dy * np.cos(ego_rad)
+                y_body = -dx * np.cos(ego_rad) + dy * np.sin(ego_rad)
+
+                rel_angle = s_angle - ego_angle
+                cos_i = float(np.cos(np.radians(rel_angle)))
+                sin_i = float(np.sin(np.radians(rel_angle)))
+
+                social_features.extend([x_body, y_body, s_speed, cos_i, sin_i])
+
+        while len(social_features) < self.k_nearest * 5:
+            social_features.extend([SAFE_DISTANCE, 0.0, 0.0, 1.0, 0.0])
+
+        obs_vector = np.array(ego_state + social_features, dtype=np.float32)
+        return obs_vector
