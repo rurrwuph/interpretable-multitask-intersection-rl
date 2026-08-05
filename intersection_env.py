@@ -331,3 +331,4 @@ class MultiTaskIntersectionEnv(gym.Env):
 
         obs_vector = np.array(ego_state + social_features, dtype=np.float32)
         return obs_vector
+# tuned ttc weight penalty
