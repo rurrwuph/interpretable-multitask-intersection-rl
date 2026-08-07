@@ -33,72 +33,29 @@ class MultiTaskDQN(nn.Module):
          # stream 1: state-value-like term V(s) in R^{n_subtasks}
         # stream 2: advantage-like term A(s,a) in R^{n_actions x n_subtasks}
 
-        self.value_stream = nn.Sequential(
-            nn.Linear(trunk_hidden, stream_hidden),
-            nn.ReLU(),
-            nn.Linear(stream_hidden, n_subtasks),
-        )
-
-        self.advantage_stream = nn.Sequential(
-            nn.Linear(trunk_hidden, stream_hidden),
-            nn.ReLU(),
-            nn.Linear(stream_hidden, n_actions * n_subtasks),
-        )
-
-    def forward(self, obs):
-        """
-        obs: (batch, OBS_DIM) float tensor, layout
-             [v_e, x_1,y_1,v_1,cos_1,sin_1, ..., x_5,...,sin_5]
- 
-        Returns: R(s,a,g) as (batch, n_actions, n_subtasks)
-        """
-
-        batch = obs.shape[0]
-
-        ego = obs[:, :EGO_DIM]                       # (batch, 1)
-        social = obs[:, EGO_DIM:]                     # (batch, 25)
-        social = social.view(batch, N_SOCIAL, SOCIAL_DIM)  # (batch,5,5)
-
-        ego_padded = torch.zeros(batch, SOCIAL_DIM, device=obs.device, dtype=obs.dtype)
-
-        ego_padded[:, 0] = ego[:, 0]
-
-        # Proposed Change
-        # ego_padded[:, 0] = 0.0              # x_ego (origin)
-        # ego_padded[:, 1] = 0.0              # y_ego (origin)
-        # ego_padded[:, 2] = ego[:, 0]        # v_ego (velocity matches column 2)
-        # ego_padded[:, 3] = 1.0              # cos(0)
-        # ego_padded[:, 4] = 0.0              # sin(0)
-
-        # stack all 6 slots and apply the SAME encoder to each
-        # (batch, 6, SOCIAL_DIM)
-        all_slots = torch.cat([ego_padded.unsqueeze(1), social], dim=1)
-        encoded = self.slot_encoder(all_slots)         # (batch,6,slot_hidden)
-        encoded_flat = encoded.view(batch, -1)          # (batch, 6*slot_hidden)
- 
-        trunk_out = self.trunk(encoded_flat)             # (batch, trunk_hidden)
- 
-        v = self.value_stream(trunk_out)                 # (batch, n_subtasks)
-        a = self.advantage_stream(trunk_out).view(
-            batch, self.n_actions, self.n_subtasks)       # (batch,n_act,n_sub)
- 
-        # dueling combine, per sub-task independently:
-        # R(s,a,g)_k = V(s)_k + (A(s,a)_k - mean_a A(s,a)_k)
-        a_mean = a.mean(dim=1, keepdim=True)              # (batch,1,n_sub)
-        R = v.unsqueeze(1) + (a - a_mean)                 # (batch,n_act,n_sub)
-        return R
-
-    @staticmethod
-    def masked_q(R, g):
-        """Q(s,a;g) = g^T R(s,a,g), Eq. (4)-(5).
- 
-        R: (batch, n_actions, n_subtasks)
-        g: (batch, n_subtasks)
-        returns: (batch, n_actions)
-        """
-        # (batch, n_actions, n_subtasks) x (batch, n_subtasks, 1)
-        # -> (batch, n_actions, 1) -> (batch, n_actions)
-        return torch.bmm(R, g.unsqueeze(-1)).squeeze(-1)
-
-
-
+        
+        # trial_mlp_head_0 = nn.Linear(64, 4)
+        # trial_mlp_head_1 = nn.Linear(64, 4)
+        # trial_mlp_head_2 = nn.Linear(64, 4)
+        # trial_mlp_head_3 = nn.Linear(64, 4)
+        # trial_mlp_head_4 = nn.Linear(64, 4)
+        # trial_mlp_head_5 = nn.Linear(64, 4)
+        # trial_mlp_head_6 = nn.Linear(64, 4)
+        # trial_mlp_head_7 = nn.Linear(64, 4)
+        # trial_mlp_head_8 = nn.Linear(64, 4)
+        # trial_mlp_head_9 = nn.Linear(64, 4)
+        # trial_mlp_head_10 = nn.Linear(64, 4)
+        # trial_mlp_head_11 = nn.Linear(64, 4)
+        # trial_mlp_head_12 = nn.Linear(64, 4)
+        # trial_mlp_head_13 = nn.Linear(64, 4)
+        # trial_mlp_head_14 = nn.Linear(64, 4)
+        # trial_mlp_head_15 = nn.Linear(64, 4)
+        # trial_mlp_head_16 = nn.Linear(64, 4)
+        # trial_mlp_head_17 = nn.Linear(64, 4)
+        # trial_mlp_head_18 = nn.Linear(64, 4)
+        # trial_mlp_head_19 = nn.Linear(64, 4)
+        # trial_mlp_head_20 = nn.Linear(64, 4)
+        # trial_mlp_head_21 = nn.Linear(64, 4)
+        # trial_mlp_head_22 = nn.Linear(64, 4)
+        # trial_mlp_head_23 = nn.Linear(64, 4)
+        # trial_mlp_head_24 = nn.Linear(64, 4)
