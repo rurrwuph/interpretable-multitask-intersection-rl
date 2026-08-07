@@ -33,29 +33,16 @@ class MultiTaskDQN(nn.Module):
          # stream 1: state-value-like term V(s) in R^{n_subtasks}
         # stream 2: advantage-like term A(s,a) in R^{n_actions x n_subtasks}
 
-        
-        # trial_mlp_head_0 = nn.Linear(64, 4)
-        # trial_mlp_head_1 = nn.Linear(64, 4)
-        # trial_mlp_head_2 = nn.Linear(64, 4)
-        # trial_mlp_head_3 = nn.Linear(64, 4)
-        # trial_mlp_head_4 = nn.Linear(64, 4)
-        # trial_mlp_head_5 = nn.Linear(64, 4)
-        # trial_mlp_head_6 = nn.Linear(64, 4)
-        # trial_mlp_head_7 = nn.Linear(64, 4)
-        # trial_mlp_head_8 = nn.Linear(64, 4)
-        # trial_mlp_head_9 = nn.Linear(64, 4)
-        # trial_mlp_head_10 = nn.Linear(64, 4)
-        # trial_mlp_head_11 = nn.Linear(64, 4)
-        # trial_mlp_head_12 = nn.Linear(64, 4)
-        # trial_mlp_head_13 = nn.Linear(64, 4)
-        # trial_mlp_head_14 = nn.Linear(64, 4)
-        # trial_mlp_head_15 = nn.Linear(64, 4)
-        # trial_mlp_head_16 = nn.Linear(64, 4)
-        # trial_mlp_head_17 = nn.Linear(64, 4)
-        # trial_mlp_head_18 = nn.Linear(64, 4)
-        # trial_mlp_head_19 = nn.Linear(64, 4)
-        # trial_mlp_head_20 = nn.Linear(64, 4)
-        # trial_mlp_head_21 = nn.Linear(64, 4)
-        # trial_mlp_head_22 = nn.Linear(64, 4)
-        # trial_mlp_head_23 = nn.Linear(64, 4)
-        # trial_mlp_head_24 = nn.Linear(64, 4)
+        self.value_stream = nn.Sequential(
+            nn.Linear(trunk_hidden, stream_hidden),
+            nn.ReLU(),
+            nn.Linear(stream_hidden, n_subtasks),
+        )
+
+        self.advantage_stream = nn.Sequential(
+            nn.Linear(trunk_hidden, stream_hidden),
+            nn.ReLU(),
+            nn.Linear(stream_hidden, n_actions * n_subtasks),
+        )
+
+    
