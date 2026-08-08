@@ -102,3 +102,5 @@ class MultiTaskDQN(nn.Module):
 
 
 
+
+# forward pass dimension check verified
