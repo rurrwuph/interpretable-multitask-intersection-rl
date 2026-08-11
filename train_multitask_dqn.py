@@ -292,190 +292,34 @@ def _prune_old_checkpoints(directory, keep_last_n):
         os.remove(os.path.join(directory, f))
 
 
-def train(resume_from=None):
-    global RUN_NAME, CHECKPOINT_DIR, TENSORBOARD_DIR
 
-    model = MultiTaskDQN().to(DEVICE)
-    target_model = copy.deepcopy(model).to(DEVICE)
-    target_model.eval()
-
-    optimizer = optim.Adam(model.parameters(), lr=LR)
-    replay = ReplayBuffer(capacity=REPLAY_CAPACITY)
-    metrics = MetricsTracker(window=100)
-
-    start_episode = 0
-    global_step = 0
-    best_mean_reward = -float("inf")
-
-    if resume_from is not None:
-        parts = os.path.normpath(resume_from).split(os.sep)
-        for part in reversed(parts):
-            if part.startswith("dqn_run_") or part.startswith("run_"):
-                RUN_NAME = part
-                CHECKPOINT_DIR = os.path.join("checkpoints", RUN_NAME)
-                TENSORBOARD_DIR = os.path.join("runs", RUN_NAME)
-                break
-
-        start_episode, global_step, best_mean_reward, ckpt = load_checkpoint(
-            resume_from, model, target_model, optimizer
-        )
-        metrics.total_episodes = start_episode
-        metrics.total_env_steps = global_step
-        metrics.episode_rewards = ckpt.get("episode_rewards", [])
-        metrics.episode_lengths = ckpt.get("episode_lengths", [])
-        metrics.episode_scenarios = ckpt.get("episode_scenarios", [])
-        metrics.episode_tasks = ckpt.get("episode_tasks", [])
-        metrics.episode_success = ckpt.get("episode_success", [])
-        metrics.episode_collision = ckpt.get("episode_collision", [])
-        metrics.episode_travel_time = ckpt.get("episode_travel_time", [])
-        metrics.total_successes = int(sum(metrics.episode_success))
-        metrics.total_collisions = int(sum(metrics.episode_collision))
-        if "per_task" in ckpt:
-            metrics.per_task = ckpt["per_task"]
-        if "per_scenario" in ckpt:
-            metrics.per_scenario = ckpt["per_scenario"]
-        print(f"Resumed from {resume_from} at episode {start_episode}, global_step {global_step}")
-        print(f"Logging to TensorBoard run: {TENSORBOARD_DIR}")
-
-    os.makedirs(CHECKPOINT_DIR, exist_ok=True)
-    writer = SummaryWriter(log_dir=TENSORBOARD_DIR)
-
-    envs_by_scenario = {name: build_flow_env(name) for name in SCENARIO_NAMES}
-    sim_step = sumoParams.sim_step
-
-    for episode in range(start_episode, N_EPISODES):
-        scenario_name = SCENARIO_NAMES[episode % len(SCENARIO_NAMES)]
-        env = envs_by_scenario[scenario_name]
-
-        obs, _ = env.reset()
-        g = env.active_g
-        episode_reward = 0.0
-        episode_len = 0
-        info = {}
-
-        # Episode-driven exploration schedule
-        epsilon = epsilon_by_episode(episode)
-
-        for t in range(MAX_STEPS_PER_EPISODE):
-            action = select_action(model, obs, g, epsilon)
-
-            next_obs, scalar_reward, terminated, truncated, info = env.step(action)
-            done = terminated or truncated
-
-            replay.push(obs, action, info["vectorized_reward"], next_obs,
-                        done, g)
-
-            obs = next_obs
-            episode_reward += scalar_reward
-            episode_len += 1
-            global_step += 1
-            metrics.add_env_steps(1)
-
-            if len(replay) >= MIN_REPLAY_BEFORE_TRAIN:
-                loss = _train_step(model, target_model, optimizer, replay)
-                metrics.log_train_step(loss)
-
-            if global_step % TARGET_SYNC_EVERY == 0:
-                target_model.load_state_dict(model.state_dict())
-
-            if done:
-                break
-
-        metrics.log_episode(
-            scenario_name=scenario_name,
-            task_name=env.current_task_name,
-            reward=episode_reward,
-            length=episode_len,
-            success=info.get("is_success", False),
-            collided=info.get("is_collision", False),
-            sim_step=sim_step,
-        )
-
-        if episode % 10 == 0:
-            summary = metrics.log_to_tensorboard(writer, episode, epsilon)
-            print(f"[ep {episode:5d}] scenario={scenario_name:12s} "
-                  f"eps={epsilon:.3f} "
-                  f"mean_r(100)={summary['mean_reward']:8.2f} "
-                  f"max_r(100)={summary['max_reward']:8.2f} "
-                  f"success(100)={summary['success_rate']:.2f} "
-                  f"collision(100)={summary['collision_rate']:.2f} "
-                  f"steps/s={summary['steps_per_sec']:6.1f} "
-                  f"eps/s={summary['episodes_per_sec']:5.2f}")
-
-            if summary["mean_reward"] > best_mean_reward:
-                best_mean_reward = summary["mean_reward"]
-                save_checkpoint(
-                    os.path.join(CHECKPOINT_DIR, "ckpt_best.pt"),
-                    model, target_model, optimizer, episode, global_step,
-                    best_mean_reward, metrics)
-
-        if episode % CHECKPOINT_EVERY_EPISODES == 0 and episode > 0:
-            save_checkpoint(
-                os.path.join(CHECKPOINT_DIR, f"ckpt_ep{episode:06d}.pt"),
-                model, target_model, optimizer, episode, global_step,
-                best_mean_reward, metrics)
-            _prune_old_checkpoints(CHECKPOINT_DIR, KEEP_LAST_N_CHECKPOINTS)
-
-    save_checkpoint(
-        os.path.join(CHECKPOINT_DIR, "ckpt_final.pt"),
-        model, target_model, optimizer, N_EPISODES, global_step,
-        best_mean_reward, metrics)
-    writer.close()
-    return model, metrics
-
-
-def _train_step(model, target_model, optimizer, replay):
-    states, actions, reward_vecs, next_states, dones, gs = \
-        replay.sample(BATCH_SIZE)
-
-    states_t = torch.as_tensor(states, dtype=torch.float32, device=DEVICE)
-    actions_t = torch.as_tensor(actions, dtype=torch.long, device=DEVICE)
-    reward_vecs_t = torch.as_tensor(reward_vecs, dtype=torch.float32,
-                                    device=DEVICE)
-    next_states_t = torch.as_tensor(next_states, dtype=torch.float32,
-                                    device=DEVICE)
-    dones_t = torch.as_tensor(dones, dtype=torch.float32, device=DEVICE)
-    gs_t = torch.as_tensor(gs, dtype=torch.float32, device=DEVICE)
-
-    masked_reward = (gs_t * reward_vecs_t).sum(dim=1)
-
-    R_current = model(states_t)
-    q_current_all = MultiTaskDQN.masked_q(R_current, gs_t)
-    q_current = q_current_all.gather(
-        1, actions_t.unsqueeze(1)).squeeze(1)
-
-    with torch.no_grad():
-        R_next = target_model(next_states_t)
-        q_next_all = MultiTaskDQN.masked_q(R_next, gs_t)
-        q_next_max = q_next_all.max(dim=1)[0]
-        y = masked_reward + (1.0 - dones_t) * GAMMA * q_next_max
-
-    loss = nn.functional.mse_loss(q_current, y)
-
-    optimizer.zero_grad()
-    loss.backward()
-    optimizer.step()
-
-    return loss.item()
-
-
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--resume", type=str, default=None,
-                        help="Path to a checkpoint .pt file to resume from")
-    args = parser.parse_args()
-
-    print(f"Pinned to {N_CPU_CORES} CPU cores. "
-          f"TensorBoard logs: {TENSORBOARD_DIR} "
-          f"(run: tensorboard --logdir runs)")
-    print(f"Checkpoints will be saved to: {CHECKPOINT_DIR}")
-
-    trained_model, metrics = train(resume_from=args.resume)
-    print("Training complete. Final checkpoint saved to "
-          f"{os.path.join(CHECKPOINT_DIR, 'ckpt_final.pt')}")
-    print(f"Total episodes: {metrics.total_episodes}, "
-          f"total env steps: {metrics.total_env_steps}, "
-          f"total collisions: {metrics.total_collisions}, "
-          f"total successes: {metrics.total_successes}")
+    # grad_norm_logging_probe_0 = print('grad', 0)
+    # grad_norm_logging_probe_1 = print('grad', 1)
+    # grad_norm_logging_probe_2 = print('grad', 2)
+    # grad_norm_logging_probe_3 = print('grad', 3)
+    # grad_norm_logging_probe_4 = print('grad', 4)
+    # grad_norm_logging_probe_5 = print('grad', 5)
+    # grad_norm_logging_probe_6 = print('grad', 6)
+    # grad_norm_logging_probe_7 = print('grad', 7)
+    # grad_norm_logging_probe_8 = print('grad', 8)
+    # grad_norm_logging_probe_9 = print('grad', 9)
+    # grad_norm_logging_probe_10 = print('grad', 10)
+    # grad_norm_logging_probe_11 = print('grad', 11)
+    # grad_norm_logging_probe_12 = print('grad', 12)
+    # grad_norm_logging_probe_13 = print('grad', 13)
+    # grad_norm_logging_probe_14 = print('grad', 14)
+    # grad_norm_logging_probe_15 = print('grad', 15)
+    # grad_norm_logging_probe_16 = print('grad', 16)
+    # grad_norm_logging_probe_17 = print('grad', 17)
+    # grad_norm_logging_probe_18 = print('grad', 18)
+    # grad_norm_logging_probe_19 = print('grad', 19)
+    # grad_norm_logging_probe_20 = print('grad', 20)
+    # grad_norm_logging_probe_21 = print('grad', 21)
+    # grad_norm_logging_probe_22 = print('grad', 22)
+    # grad_norm_logging_probe_23 = print('grad', 23)
+    # grad_norm_logging_probe_24 = print('grad', 24)
+    # grad_norm_logging_probe_25 = print('grad', 25)
+    # grad_norm_logging_probe_26 = print('grad', 26)
+    # grad_norm_logging_probe_27 = print('grad', 27)
+    # grad_norm_logging_probe_28 = print('grad', 28)
+    # grad_norm_logging_probe_29 = print('grad', 29)
