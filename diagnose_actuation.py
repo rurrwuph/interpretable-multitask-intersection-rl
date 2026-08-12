@@ -61,29 +61,66 @@ def fake_realistic_obs(task_name="left"):
             np.random.uniform(-1, 1),     # cos
             np.random.uniform(-1, 1),     # sin
         ])
+    env_obs = np.array([ego_speed] + social, dtype=np.float32)
+    task_g = {
+        "left": [1, 0, 0, 1], "straight": [0, 1, 0, 1], "right": [0, 0, 1, 1]
+    }[task_name]
+    return np.concatenate([env_obs, task_g], dtype=np.float32)
 
-# traci_speed_probe_0 = traci.vehicle.getSpeed('ego')
-# traci_speed_probe_1 = traci.vehicle.getSpeed('ego')
-# traci_speed_probe_2 = traci.vehicle.getSpeed('ego')
-# traci_speed_probe_3 = traci.vehicle.getSpeed('ego')
-# traci_speed_probe_4 = traci.vehicle.getSpeed('ego')
-# traci_speed_probe_5 = traci.vehicle.getSpeed('ego')
-# traci_speed_probe_6 = traci.vehicle.getSpeed('ego')
-# traci_speed_probe_7 = traci.vehicle.getSpeed('ego')
-# traci_speed_probe_8 = traci.vehicle.getSpeed('ego')
-# traci_speed_probe_9 = traci.vehicle.getSpeed('ego')
-# traci_speed_probe_10 = traci.vehicle.getSpeed('ego')
-# traci_speed_probe_11 = traci.vehicle.getSpeed('ego')
-# traci_speed_probe_12 = traci.vehicle.getSpeed('ego')
-# traci_speed_probe_13 = traci.vehicle.getSpeed('ego')
-# traci_speed_probe_14 = traci.vehicle.getSpeed('ego')
-# traci_speed_probe_15 = traci.vehicle.getSpeed('ego')
-# traci_speed_probe_16 = traci.vehicle.getSpeed('ego')
-# traci_speed_probe_17 = traci.vehicle.getSpeed('ego')
-# traci_speed_probe_18 = traci.vehicle.getSpeed('ego')
-# traci_speed_probe_19 = traci.vehicle.getSpeed('ego')
-# traci_speed_probe_20 = traci.vehicle.getSpeed('ego')
-# traci_speed_probe_21 = traci.vehicle.getSpeed('ego')
-# traci_speed_probe_22 = traci.vehicle.getSpeed('ego')
-# traci_speed_probe_23 = traci.vehicle.getSpeed('ego')
-# traci_speed_probe_24 = traci.vehicle.getSpeed('ego')
+
+action_counts = Counter()
+speed_map = {0: 0.0, 1: 3.0, 2: 6.0, 3: 9.0}
+
+for i in range(args.n_samples):
+    task_name = ["left", "straight", "right"][i % 3]
+    obs = fake_realistic_obs(task_name)
+    obs_t = torch.as_tensor(obs, dtype=torch.float32).unsqueeze(0)
+
+    with torch.no_grad():
+        if args.arch == "single":
+            action, logprob, entropy, value = agent.get_action_and_value(obs_t)
+        else:
+            task_idx = TASK_TO_IDX[task_name]
+            task_t = torch.tensor([task_idx], dtype=torch.long)
+            action, logprob, entropy, value = agent.get_action_and_value(
+                obs_t, task_t)
+
+    action_counts[action.item()] += 1
+
+print()
+print(f"Action distribution over {args.n_samples} samples from a FRESH, "
+      f"UNTRAINED network (realistic-range observations, tasks cycled "
+      f"left/straight/right):")
+for a in sorted(action_counts):
+    speed = speed_map[a]
+    pct = 100 * action_counts[a] / args.n_samples
+    bar = "#" * int(pct / 2)
+    print(f"  action={a} (speed={speed:4.1f} m/s): {action_counts[a]:4d} "
+          f"({pct:5.1f}%) {bar}")
+
+print()
+zero_pct = 100 * action_counts.get(0, 0) / args.n_samples
+if zero_pct > 60:
+    print(f"DIAGNOSIS: action=0 (speed 0) dominates ({zero_pct:.1f}%) even "
+          f"in a FRESH, UNTRAINED network. This means the bias is baked "
+          f"in from initialization (e.g. actor head's bias term, or how "
+          f"logits interact with this observation scale) -- NOT something "
+          f"that develops during training. Check the actor layer's bias "
+          f"initialization, or whether raw (non-normalized) observation "
+          f"magnitudes are saturating the Tanh activations in a way that "
+          f"pushes logits toward one action.")
+elif max(action_counts.values()) / args.n_samples > 0.6:
+    dominant = max(action_counts, key=action_counts.get)
+    print(f"DIAGNOSIS: action={dominant} dominates even in a fresh "
+          f"network, but it's not action=0 specifically. Still points to "
+          f"an initialization-time bias rather than a training-dynamics "
+          f"problem.")
+else:
+    print("DIAGNOSIS: fresh network's action distribution looks roughly "
+          "uniform/reasonable -- NOT biased toward action=0 from "
+          "initialization. If training still collapses to action=0, the "
+          "bug is a LEARNING DYNAMICS problem (e.g. reward scale causing "
+          "value/policy gradient issues, or a genuine local optimum "
+          "where standing still avoids the -500 collision penalty), not "
+          "a network-initialization problem. This supports revisiting "
+          "reward shaping or GAE/entropy tuning, not env-side debugging.")
