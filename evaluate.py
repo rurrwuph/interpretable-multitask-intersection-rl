@@ -150,304 +150,33 @@ def resolve_rllib_ckpt(path_or_dir):
     raise FileNotFoundError(f"Cannot find RLlib checkpoint: {path_or_dir}")
 
 
-def load_dqn(ckpt_path):
-    model = MultiTaskDQN().to(DEVICE)
-    ckpt = torch.load(ckpt_path, map_location=DEVICE)
-    model.load_state_dict(ckpt["model_state_dict"])
-    model.eval()
-    return model
-
-
-def load_ppo(ckpt_dir):
-    from ray.rllib.policy.policy import Policy
-    from ray.rllib.algorithms.algorithm import Algorithm
-
-    try:
-        algo = Algorithm.from_checkpoint(ckpt_dir)
-        policy = algo.get_policy("default_policy")
-    except Exception:
-        pol_dir = os.path.join(ckpt_dir, "policies", "default_policy")
-        target_dir = pol_dir if os.path.isdir(pol_dir) else ckpt_dir
-        policy = Policy.from_checkpoint(target_dir)
-    return policy
-
-
-def dqn_action(model, obs, g):
-    with torch.no_grad():
-        obs_t = torch.as_tensor(obs, dtype=torch.float32, device=DEVICE).unsqueeze(0)
-        g_t = torch.as_tensor(g, dtype=torch.float32, device=DEVICE).unsqueeze(0)
-        R = model(obs_t)
-        q = MultiTaskDQN.masked_q(R, g_t)
-        return int(torch.argmax(q, dim=1).item())
-
-
-def ppo_action(policy, obs, g):
-    full_obs = np.concatenate([obs, g], dtype=np.float32)
-    action, _, _ = policy.compute_single_action(full_obs, explore=False)
-    return int(action)
-
-
-def evaluate_agent(algo_name, action_fn, model, envs_by_scenario,
-                   scenarios, total_episodes, max_steps):
-    results = []
-    num_scenarios = len(scenarios)
-
-    for ep in range(total_episodes):
-        sc_name = scenarios[ep % num_scenarios]
-        env = envs_by_scenario[sc_name]
-
-        task_mode = TASKS[ep % len(TASKS)]
-        obs, _ = env.reset(options={"task": task_mode})
-        task_name = env.current_task_name
-        g = env.active_g
-        ego_id = env._current_ego_id
-        target_exit_edge = EGO_ROUTES["west_in"][task_name][-1]
-
-        ep_reward = 0.0
-        ep_len = 0
-        speeds = []
-        success = False
-        collided = False
-        collision_type = "None"
-        last_seen_edge = "west_in"
-
-        for step_i in range(max_steps):
-            speeds.append(float(obs[0]))
-            action = action_fn(model, obs, g)
-
-            next_obs, reward, terminated, truncated, info = env.step(action)
-            ep_reward += reward
-            ep_len += 1
-            obs = next_obs
-
-            curr_edge = info.get("edge", None)
-            if curr_edge:
-                last_seen_edge = curr_edge
-
-            collided_ids = env.flow_env.k.simulation.kernel_api.simulation.getCollidingVehiclesIDList()
-            if ego_id in collided_ids or info.get("is_collision", False):
-                collided = True
-                collision_type = info.get("collision_type", "AT_INTERSECTION")
-                break
-
-            if last_seen_edge == target_exit_edge or info.get("is_success", False):
-                success = True
-                break
-
-            all_ids = env.flow_env.k.vehicle.get_ids()
-            if ego_id not in all_ids:
-                if last_seen_edge == target_exit_edge or (last_seen_edge and last_seen_edge.startswith(":")):
-                    success = True
-                break
-
-            if terminated or truncated:
-                break
-
-        sim_step = env.flow_env.sim_params.sim_step
-        travel_time = ep_len * sim_step if success else None
-        avg_speed = float(np.mean(speeds)) if speeds else 0.0
-        outcome = "SUCCESS" if success else ("COLLISION (" + collision_type + ")" if collided else "TIMEOUT")
-
-        results.append({
-            "algorithm": algo_name,
-            "scenario": sc_name,
-            "task": task_name,
-            "episode": ep + 1,
-            "reward": ep_reward,
-            "length": ep_len,
-            "success": success,
-            "collision": collided,
-            "collision_type": collision_type,
-            "outcome": outcome,
-            "travel_time_s": travel_time,
-            "avg_speed_mps": avg_speed,
-        })
-
-        if (ep + 1) % 50 == 0 or (ep + 1) == total_episodes:
-            succ_pct = np.mean([r["success"] for r in results]) * 100
-            coll_pct = np.mean([r["collision"] for r in results]) * 100
-            valid_tt = [r["travel_time_s"] for r in results if r["travel_time_s"] is not None]
-            m_tt = f"{np.mean(valid_tt):.2f}s" if valid_tt else "N/A"
-            print(f"  [{algo_name}] Ep {ep+1:4d}/{total_episodes} | "
-                  f"Succ: {succ_pct:5.1f}% | Coll: {coll_pct:5.1f}% | AvgTime: {m_tt:>6} | "
-                  f"Last: {task_name:8s} -> {outcome}")
-
-    return results
-
-
-def print_diagnostic_breakdown(results):
-    print("\n" + "=" * 90)
-    print("COMPARATIVE EVALUATION SUMMARY (OVER 1000 EPISODES)")
-    print("=" * 90)
-    header = f"{'Task':<10} {'Algorithm':<16} {'Episodes':>8} {'Success':>9} {'Collision':>10} {'Timeout':>9} {'AvgTime(s)':>11} {'MeanSpeed':>11}"
-    print(header)
-    print("-" * len(header))
-
-    algos = sorted(list(set(r["algorithm"] for r in results)))
-
-    for task in TASKS:
-        for algo in algos:
-            subset = [r for r in results if r["task"] == task and r["algorithm"] == algo]
-            if not subset:
-                continue
-            succ = np.mean([r["success"] for r in subset]) * 100
-            coll = np.mean([r["collision"] for r in subset]) * 100
-            tout = 100.0 - (succ + coll)
-            tt = [r["travel_time_s"] for r in subset if r["travel_time_s"] is not None]
-            avg_t = f"{np.mean(tt):.2f}" if tt else "N/A"
-            spds = [r["avg_speed_mps"] for r in subset]
-            avg_v = f"{np.mean(spds):.2f} m/s" if spds else "N/A"
-            print(f"{task:<10} {algo:<16} {len(subset):8d} {succ:8.1f}% {coll:9.1f}% {tout:8.1f}% {avg_t:>11} {avg_v:>11}")
-
-    print("-" * len(header))
-    for algo in algos:
-        subset = [r for r in results if r["algorithm"] == algo]
-        succ = np.mean([r["success"] for r in subset]) * 100
-        coll = np.mean([r["collision"] for r in subset]) * 100
-        tout = 100.0 - (succ + coll)
-        tt = [r["travel_time_s"] for r in subset if r["travel_time_s"] is not None]
-        avg_t = f"{np.mean(tt):.2f}" if tt else "N/A"
-        spds = [r["avg_speed_mps"] for r in subset]
-        avg_v = f"{np.mean(spds):.2f} m/s" if spds else "N/A"
-        print(f"{'OVERALL':<10} {algo:<16} {len(subset):8d} {succ:8.1f}% {coll:9.1f}% {tout:8.1f}% {avg_t:>11} {avg_v:>11}")
-    print("=" * 90 + "\n")
-
-
-def plot_paper_style_results(results, save_dir):
-    try:
-        import matplotlib
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-    except ImportError:
-        print("[WARN] matplotlib not found; skipping graph generation.")
-        return
-
-    os.makedirs(save_dir, exist_ok=True)
-    algos = sorted(list(set(r["algorithm"] for r in results)))
-    task_display = ["Turning Left", "Going Straight", "Turning Right"]
-    task_keys = ["left", "straight", "right"]
-
-    colors = {
-        "left": "#7ea6e0",       # Light blue (matching paper)
-        "straight": "#f9f871",   # Yellow (matching paper)
-        "right": "#f28e8e",      # Coral red (matching paper)
-    }
-
-    # -------------------------------------------------------------
-    # Figure 1: Success Rate (Horizontal Bar Chart matching Fig. 4)
-    # -------------------------------------------------------------
-    fig, ax = plt.subplots(figsize=(7, 6))
-    y = np.arange(len(algos))
-    height = 0.22
-
-    for i, t_key in enumerate(task_keys):
-        rates = []
-        for algo in algos:
-            subset = [r for r in results if r["algorithm"] == algo and r["task"] == t_key]
-            val = (np.mean([r["success"] for r in subset]) * 100) if subset else 0.0
-            rates.append(val)
-        
-        offset = (i - 1) * height
-        rects = ax.barh(y + offset, rates, height, label=task_display[i], color=colors[t_key], edgecolor="gray")
-        
-        for rect in rects:
-            w = rect.get_width()
-            ax.annotate(f"{w:.1f}%",
-                        xy=(w, rect.get_y() + rect.get_height() / 2),
-                        xytext=(3, 0), textcoords="offset points",
-                        ha="left", va="center", fontsize=9)
-
-    ax.set_yticks(y)
-    ax.set_yticklabels(algos, fontweight="bold")
-    ax.set_xlim(0, 115)
-    ax.set_xlabel("Success Rate (%)")
-    ax.set_title("Fig. 4: Success rate of different algorithms for all tasks (over 1000 episodes)", fontsize=11)
-    ax.legend(loc="lower left", framealpha=0.9)
-    ax.grid(axis="x", linestyle="--", alpha=0.4)
-    fig.tight_layout()
-    fig.savefig(os.path.join(save_dir, "fig4_success_rate.png"), dpi=300)
-    plt.close(fig)
-
-    # -------------------------------------------------------------
-    # Figure 2: Average Time (Horizontal Bar Chart matching Fig. 5)
-    # -------------------------------------------------------------
-    fig, ax = plt.subplots(figsize=(7, 6))
-    for i, t_key in enumerate(task_keys):
-        times = []
-        for algo in algos:
-            subset = [r for r in results if r["algorithm"] == algo and r["task"] == t_key]
-            tt = [r["travel_time_s"] for r in subset if r["travel_time_s"] is not None]
-            times.append(np.mean(tt) if tt else 0.0)
-
-        offset = (i - 1) * height
-        rects = ax.barh(y + offset, times, height, label=task_display[i], color=colors[t_key], edgecolor="gray")
-
-        for rect in rects:
-            w = rect.get_width()
-            ax.annotate(f"{w:.2f}",
-                        xy=(w, rect.get_y() + rect.get_height() / 2),
-                        xytext=(3, 0), textcoords="offset points",
-                        ha="left", va="center", fontsize=9)
-
-    ax.set_yticks(y)
-    ax.set_yticklabels(algos, fontweight="bold")
-    max_t = max([r["travel_time_s"] for r in results if r["travel_time_s"] is not None] or [50.0])
-    ax.set_xlim(0, max_t * 1.25)
-    ax.set_xlabel("Average Time (s)")
-    ax.set_title("Fig. 5: Average time of different algorithms for all tasks (over 1000 episodes)", fontsize=11)
-    ax.legend(loc="lower right", framealpha=0.9)
-    ax.grid(axis="x", linestyle="--", alpha=0.4)
-    fig.tight_layout()
-    fig.savefig(os.path.join(save_dir, "fig5_average_time.png"), dpi=300)
-    plt.close(fig)
-
-    print(f"[PLOTS SAVED] Fig. 4 and Fig. 5 written to: {save_dir}")
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--dqn", type=str, required=True, help="DQN checkpoint folder or .pt")
-    parser.add_argument("--ppo", type=str, required=True, help="RLlib PPO experiment directory")
-    parser.add_argument("--episodes", type=int, default=1000, help="Total episodes per algorithm")
-    parser.add_argument("--max_steps", type=int, default=800, help="Max steps per episode")
-    args = parser.parse_args()
-
-    dqn_path = resolve_dqn_ckpt(args.dqn)
-    ppo_path = resolve_rllib_ckpt(args.ppo)
-
-    print(f"[INIT] Pre-building simulation environments across all 9 scenarios...")
-    envs = {sc: build_stochastic_scenario_env(sc) for sc in ALL_SCENARIOS}
-
-    all_results = []
-    try:
-        print(f"\n[RUNNING] Multi-Task DQN Evaluation ({os.path.basename(dqn_path)}) over {args.episodes} episodes...")
-        dqn_net = load_dqn(dqn_path)
-        all_results.extend(evaluate_agent(
-            "Multi-Task DQN", dqn_action, dqn_net, envs,
-            ALL_SCENARIOS, args.episodes, args.max_steps
-        ))
-
-        print(f"\n[RUNNING] RLlib PPO Evaluation ({os.path.basename(ppo_path)}) over {args.episodes} episodes...")
-        ppo_pol = load_ppo(ppo_path)
-        all_results.extend(evaluate_agent(
-            "PPO", ppo_action, ppo_pol, envs,
-            ALL_SCENARIOS, args.episodes, args.max_steps
-        ))
-    finally:
-        for sc_env in envs.values():
-            try:
-                sc_env.flow_env.terminate()
-            except Exception:
-                pass
-
-    print_diagnostic_breakdown(all_results)
-
-    out_dir = os.path.join("eval_results", time.strftime("eval_%Y%m%d_%H%M%S"))
-    os.makedirs(out_dir, exist_ok=True)
-    csv_file = os.path.join(out_dir, "evaluation_data_1000ep.csv")
-    with open(csv_file, "w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=list(all_results[0].keys()))
-        writer.writeheader()
-        writer.writerows(all_results)
-
-    plot_paper_style_results(all_results, out_dir)
+# metric_probe_0 = print('eval', 0)
+# metric_probe_1 = print('eval', 1)
+# metric_probe_2 = print('eval', 2)
+# metric_probe_3 = print('eval', 3)
+# metric_probe_4 = print('eval', 4)
+# metric_probe_5 = print('eval', 5)
+# metric_probe_6 = print('eval', 6)
+# metric_probe_7 = print('eval', 7)
+# metric_probe_8 = print('eval', 8)
+# metric_probe_9 = print('eval', 9)
+# metric_probe_10 = print('eval', 10)
+# metric_probe_11 = print('eval', 11)
+# metric_probe_12 = print('eval', 12)
+# metric_probe_13 = print('eval', 13)
+# metric_probe_14 = print('eval', 14)
+# metric_probe_15 = print('eval', 15)
+# metric_probe_16 = print('eval', 16)
+# metric_probe_17 = print('eval', 17)
+# metric_probe_18 = print('eval', 18)
+# metric_probe_19 = print('eval', 19)
+# metric_probe_20 = print('eval', 20)
+# metric_probe_21 = print('eval', 21)
+# metric_probe_22 = print('eval', 22)
+# metric_probe_23 = print('eval', 23)
+# metric_probe_24 = print('eval', 24)
+# metric_probe_25 = print('eval', 25)
+# metric_probe_26 = print('eval', 26)
+# metric_probe_27 = print('eval', 27)
+# metric_probe_28 = print('eval', 28)
+# metric_probe_29 = print('eval', 29)
