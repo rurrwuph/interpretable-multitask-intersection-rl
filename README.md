@@ -20,3 +20,5 @@ The network models 9 distinct unsignalized intersection geometries:
 - **Multi-Task DQN**: Shared latent trunk with decomposed subtask value and advantage streams.
 - **Safety Subtasks**: Time-to-Collision (TTC) penalty, velocity tracking, collision avoidance.
 - **Baseline**: PPO baseline using Ray RLlib with Tune.
+
+Benchmark evaluation harness under active development.
