@@ -130,3 +130,69 @@ class CustomMetricsCallback(DefaultCallbacks):
         task_name = last_info.get("task_name", "unknown")
         scenario = last_info.get("scenario", "unknown")
         sim_step = sumoParams.sim_step
+
+        episode.custom_metrics["success_rate"] = is_success
+        episode.custom_metrics["collision_rate"] = is_collision
+        episode.custom_metrics[f"success_{task_name}"] = is_success
+        episode.custom_metrics[f"collision_{task_name}"] = is_collision
+        episode.custom_metrics[f"success_{scenario}"] = is_success
+
+        if is_success:
+            episode.custom_metrics["travel_time_s"] = episode.length * sim_step
+
+
+# ----------------------------------------------------------------------
+# Main Execution
+# ----------------------------------------------------------------------
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--episodes", type=int, default=5000, help="Total episodes to train")
+    args = parser.parse_args()
+
+    ray.init(ignore_reinit_error=True, num_cpus=N_CPU_CORES)
+    tune.register_env("MultiTaskIntersectionRLlib-v0", lambda cfg: RLlibIntersectionWrapper(cfg))
+
+    run_name = time.strftime("ppo_rllib_%Y%m%d_%H%M%S")
+    local_dir = os.path.abspath("./runs")
+
+    config = (
+        PPOConfig()
+        .environment(
+            env="MultiTaskIntersectionRLlib-v0",
+            env_config={"scenarios": SCENARIO_NAMES},
+        )
+        .framework("torch")
+        # Keep num_rollout_workers=0 to run on driver process, preventing SUMO TraCI port collisions
+        .rollouts(
+            num_rollout_workers=0,
+            rollout_fragment_length="auto",
+        )
+        .training(
+            lr=3e-4,
+            gamma=0.99,
+            lambda_=0.95,
+            clip_param=0.2,
+            entropy_coeff=0.05,
+            vf_loss_coeff=0.5,
+            grad_clip=0.5,
+            train_batch_size=2048,
+            sgd_minibatch_size=64,
+            num_sgd_iter=4,
+            model={
+                "fcnet_hiddens": [128, 128],
+                "fcnet_activation": "tanh",
+            },
+        )
+        .callbacks(CustomMetricsCallback)
+        .resources(num_gpus=0)
+    )
+
+    tune.run(
+        "PPO",
+        name=run_name,
+        config=config.to_dict(),
+        stop={"episodes_total": args.episodes},
+        checkpoint_freq=50,
+        checkpoint_at_end=True,
+        local_dir=local_dir,
+    )
