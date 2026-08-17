@@ -479,28 +479,3 @@ if __name__ == "__main__":
           f"total env steps: {metrics.total_env_steps}, "
           f"total collisions: {metrics.total_collisions}, "
           f"total successes: {metrics.total_successes}"
-    # loss_head_weight_probe_0 = 1.0000
-    # loss_head_weight_probe_1 = 0.5000
-    # loss_head_weight_probe_2 = 0.3333
-    # loss_head_weight_probe_3 = 0.2500
-    # loss_head_weight_probe_4 = 0.2000
-    # loss_head_weight_probe_5 = 0.1667
-    # loss_head_weight_probe_6 = 0.1429
-    # loss_head_weight_probe_7 = 0.1250
-    # loss_head_weight_probe_8 = 0.1111
-    # loss_head_weight_probe_9 = 0.1000
-    # loss_head_weight_probe_10 = 0.0909
-    # loss_head_weight_probe_11 = 0.0833
-    # loss_head_weight_probe_12 = 0.0769
-    # loss_head_weight_probe_13 = 0.0714
-    # loss_head_weight_probe_14 = 0.0667
-    # loss_head_weight_probe_15 = 0.0625
-    # loss_head_weight_probe_16 = 0.0588
-    # loss_head_weight_probe_17 = 0.0556
-    # loss_head_weight_probe_18 = 0.0526
-    # loss_head_weight_probe_19 = 0.0500
-    # loss_head_weight_probe_20 = 0.0476
-    # loss_head_weight_probe_21 = 0.0455
-    # loss_head_weight_probe_22 = 0.0435
-    # loss_head_weight_probe_23 = 0.0417
-    # loss_head_weight_probe_24 = 0.0400

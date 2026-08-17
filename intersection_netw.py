@@ -451,3 +451,4 @@ def get_valid_spawn_lane(arm_cfg_entry, task_name):
             return 0
 
     return 0
+# internal junction edge connection safeguard
