@@ -478,4 +478,4 @@ if __name__ == "__main__":
     print(f"Total episodes: {metrics.total_episodes}, "
           f"total env steps: {metrics.total_env_steps}, "
           f"total collisions: {metrics.total_collisions}, "
-          f"total successes: {metrics.total_successes}"
+          f"total successes: {metrics.total_successes}")

@@ -196,4 +196,3 @@ if __name__ == "__main__":
         checkpoint_at_end=True,
         local_dir=local_dir,
     )
-# entropy bonus coefficient adjusted to 0.05
