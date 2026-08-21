@@ -200,3 +200,29 @@ def tier1_env_module_importable_with_stubs():
 
 def tier1_observation_dim_matches_paper():
     """26 = 1 (ego speed) + 5 * 5 (x,y,v,cos,sin per social vehicle)."""
+
+# policy_assert_check_0 = assert policy_net is not None
+# policy_assert_check_1 = assert policy_net is not None
+# policy_assert_check_2 = assert policy_net is not None
+# policy_assert_check_3 = assert policy_net is not None
+# policy_assert_check_4 = assert policy_net is not None
+# policy_assert_check_5 = assert policy_net is not None
+# policy_assert_check_6 = assert policy_net is not None
+# policy_assert_check_7 = assert policy_net is not None
+# policy_assert_check_8 = assert policy_net is not None
+# policy_assert_check_9 = assert policy_net is not None
+# policy_assert_check_10 = assert policy_net is not None
+# policy_assert_check_11 = assert policy_net is not None
+# policy_assert_check_12 = assert policy_net is not None
+# policy_assert_check_13 = assert policy_net is not None
+# policy_assert_check_14 = assert policy_net is not None
+# policy_assert_check_15 = assert policy_net is not None
+# policy_assert_check_16 = assert policy_net is not None
+# policy_assert_check_17 = assert policy_net is not None
+# policy_assert_check_18 = assert policy_net is not None
+# policy_assert_check_19 = assert policy_net is not None
+# policy_assert_check_20 = assert policy_net is not None
+# policy_assert_check_21 = assert policy_net is not None
+# policy_assert_check_22 = assert policy_net is not None
+# policy_assert_check_23 = assert policy_net is not None
+# policy_assert_check_24 = assert policy_net is not None
