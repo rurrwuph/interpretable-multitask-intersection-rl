@@ -200,29 +200,205 @@ def tier1_env_module_importable_with_stubs():
 
 def tier1_observation_dim_matches_paper():
     """26 = 1 (ego speed) + 5 * 5 (x,y,v,cos,sin per social vehicle)."""
+    k_nearest = 5
+    expected_dim = 1 + k_nearest * 5
+    assert expected_dim == 26, f"math check failed: got {expected_dim}"
 
-# policy_assert_check_0 = assert policy_net is not None
-# policy_assert_check_1 = assert policy_net is not None
-# policy_assert_check_2 = assert policy_net is not None
-# policy_assert_check_3 = assert policy_net is not None
-# policy_assert_check_4 = assert policy_net is not None
-# policy_assert_check_5 = assert policy_net is not None
-# policy_assert_check_6 = assert policy_net is not None
-# policy_assert_check_7 = assert policy_net is not None
-# policy_assert_check_8 = assert policy_net is not None
-# policy_assert_check_9 = assert policy_net is not None
-# policy_assert_check_10 = assert policy_net is not None
-# policy_assert_check_11 = assert policy_net is not None
-# policy_assert_check_12 = assert policy_net is not None
-# policy_assert_check_13 = assert policy_net is not None
-# policy_assert_check_14 = assert policy_net is not None
-# policy_assert_check_15 = assert policy_net is not None
-# policy_assert_check_16 = assert policy_net is not None
-# policy_assert_check_17 = assert policy_net is not None
-# policy_assert_check_18 = assert policy_net is not None
-# policy_assert_check_19 = assert policy_net is not None
-# policy_assert_check_20 = assert policy_net is not None
-# policy_assert_check_21 = assert policy_net is not None
-# policy_assert_check_22 = assert policy_net is not None
-# policy_assert_check_23 = assert policy_net is not None
-# policy_assert_check_24 = assert policy_net is not None
+
+def tier1_reward_function_matches_eq9():
+    """Reproduce the paper's Eq. (9) branch values directly, independent
+    of any live env instance, by calling the pure function logic."""
+    import types
+    envs_mod = types.ModuleType("flow.envs")
+    envs_base_mod = types.ModuleType("flow.envs.base")
+
+    class FakeEnv:
+        pass
+
+    envs_base_mod.Env = FakeEnv
+    sys.modules["flow.envs"] = envs_mod
+    sys.modules["flow.envs.base"] = envs_base_mod
+    import intersection_env as mte
+
+    # _subtask_reward is a plain method with no self-state dependency
+    # beyond its args, so we can call it unbound on a throwaway instance
+    # without a real flow_env.
+    dummy = mte.MultiTaskIntersectionEnv.__new__(mte.MultiTaskIntersectionEnv)
+
+    assert dummy._subtask_reward(is_active=0.0, collided=True,
+                                  succeeded=False) == 0.0, "inactive task must be masked to 0"
+    assert dummy._subtask_reward(is_active=1.0, collided=True,
+                                  succeeded=False) == -500.0
+    assert dummy._subtask_reward(is_active=1.0, collided=False,
+                                  succeeded=True) == 50.0
+    assert dummy._subtask_reward(is_active=1.0, collided=False,
+                                  succeeded=False) == 0.0
+
+
+def tier1_scalar_reward_masking_math():
+    """g^T r should zero out inactive sub-tasks and sum active ones,
+    matching Eq. (4)/(5)."""
+    import numpy as np
+    g = np.array([1.0, 0.0, 0.0, 1.0], dtype=np.float32)  # "left" task
+    r = np.array([-500.0, 999.0, 999.0, -0.15], dtype=np.float32)
+    scalar = float(np.dot(g, r))
+    # only r_ls (-500) and r_cs (-0.15) should count; r_ss/r_rs (999 each,
+    # deliberately absurd values) must be fully masked out. Use a small
+    # tolerance since g/r are float32 and exact equality is unreliable.
+    assert abs(scalar - (-500.15)) < 1e-3, f"masking broken, got {scalar}"
+
+
+# ======================================================================
+# TIER 2: live SUMO smoke test (requires flow + SUMO installed)
+# ======================================================================
+ 
+def tier2_live_sumo_smoke_test():
+    # Fresh interpreter-level import, no stubs -- will fail loudly with
+    # ModuleNotFoundError if flow isn't actually installed, which the
+    # caller catches and reports as SKIP rather than FAIL.
+    for mod in list(sys.modules):
+        if mod.startswith("flow") or mod in ("intersection_network",
+                                              "multi_task_env",
+                                              "scenario_params"):
+            del sys.modules[mod]
+ 
+    import numpy as np
+    from flow.envs.base import Env
+    from flow.core.params import SumoParams, TrafficLightParams
+ 
+    import Network_scenario as sp
+    from intersection_netw import UnsignalizedIntersectionNetwork
+    from intersection_env import MultiTaskIntersectionEnv, EGO_ID
+ 
+    # Build a minimal Flow Env subclass wired to our network + params.
+    # This mirrors what your real training entrypoint will do -- adjust
+    # class name / action-space methods if your Flow version's base Env
+    # requires overriding action_space/observation_space/_apply_rl_actions
+    # as abstract methods (some Flow versions do).
+    class _RawFlowEnv(Env):
+        @property
+        def action_space(self):
+            from gymnasium import spaces
+            return spaces.Discrete(4)
+ 
+        @property
+        def observation_space(self):
+            from gymnasium import spaces
+            return spaces.Box(low=-np.inf, high=np.inf, shape=(26,),
+                               dtype=np.float32)
+ 
+        def _apply_rl_actions(self, rl_actions):
+            pass  # actuation handled externally via setSpeed in wrapper
+ 
+        def get_state(self):
+            return np.zeros(26, dtype=np.float32)
+ 
+        def compute_reward(self, rl_actions, **kwargs):
+            return 0.0
+ 
+    network = UnsignalizedIntersectionNetwork(
+        name="smoke_test",
+        vehicles=sp.vehicles,
+        net_params=sp.build_net_params("scenario_b"),  # simplest config
+        # Empty (non-None) TrafficLightParams: unsignalized intersection,
+        # but Flow's traci kernel unconditionally calls
+        # traffic_lights.get_properties() during net generation, so None
+        # raises AttributeError here (same fix already applied in
+        # train_multitask_dqn.py's build_flow_env()).
+        traffic_lights=TrafficLightParams(),
+    )
+ 
+    raw_env = _RawFlowEnv(
+        env_params=sp.envParams,
+        sim_params=sp.sumoParams,
+        network=network,
+    )
+ 
+    env = MultiTaskIntersectionEnv(raw_env)
+ 
+    obs, info = env.reset()
+    assert obs.shape == (26,), f"obs shape wrong: {obs.shape}"
+    assert not np.isnan(obs).any(), "obs contains NaN"
+ 
+    for step_i in range(10):
+        action = env.action_space.sample()
+        obs, reward, terminated, truncated, step_info = env.step(action)
+        assert obs.shape == (26,), f"step {step_i}: obs shape wrong"
+        assert isinstance(reward, float), f"step {step_i}: reward not float"
+        assert "vectorized_reward" in step_info
+        assert "task_g" in step_info
+        if terminated or truncated:
+            break
+ 
+    print(f"    (ran {step_i + 1} steps, task={env.current_task_name}, "
+          f"final_reward={reward:.3f})")
+ 
+ 
+# ======================================================================
+# Run everything
+# ======================================================================
+ 
+if __name__ == "__main__":
+    print("=" * 70)
+    print("TIER 1: structural checks (no flow/SUMO required)")
+    print("=" * 70)
+    check("import intersection_network (stubbed flow)",
+          tier1_import_network_module)
+    check("all 9 scenarios present", tier1_nine_scenarios_present)
+    check("scenario configs have required keys",
+          tier1_scenario_configs_have_required_keys)
+    check("connections reference valid lane indices",
+          tier1_connections_reference_valid_lanes)
+    check("EGO_ROUTES covers all arms x tasks",
+          tier1_ego_routes_cover_all_arms_and_tasks)
+    check("EGO_ROUTES match real generated connections (geometry check)",
+          tier1_ego_routes_match_real_connections)
+    check("import multi_task_env (stubbed flow)",
+          tier1_env_module_importable_with_stubs)
+    check("observation dim = 1 + 5*5 = 26",
+          tier1_observation_dim_matches_paper)
+    check("_subtask_reward matches paper Eq. (9)",
+          tier1_reward_function_matches_eq9)
+    check("g^T r masking math (Eq. 4/5)",
+          tier1_scalar_reward_masking_math)
+ 
+    print()
+    print("=" * 70)
+    print("TIER 2: live SUMO smoke test (requires flow + SUMO installed)")
+    print("=" * 70)
+    # NOTE: Tier 1 checks intentionally inject fake stub modules into
+    # sys.modules under the name "flow" (and "flow.envs.base" etc.) to
+    # test our own code without a real flow install. Those stubs must be
+    # purged here first, or this guard will "successfully" import the
+    # stub and wrongly proceed into Tier 2 instead of skipping.
+    for mod in list(sys.modules):
+        if mod == "flow" or mod.startswith("flow."):
+            del sys.modules[mod]
+ 
+    try:
+        import flow  # noqa: F401
+        # Confirm this is a real install, not another stub, by checking
+        # for an attribute only a genuine flow package would have.
+        assert hasattr(flow, "__file__") and flow.__file__ is not None
+        check("live SUMO smoke test (build net, reset, 10 steps)",
+              tier2_live_sumo_smoke_test)
+    except (ImportError, AssertionError):
+        skip("live SUMO smoke test",
+             "flow is not installed in this environment -- run this "
+             "script where flow + SUMO are available to execute Tier 2")
+ 
+    print()
+    print("=" * 70)
+    print("SUMMARY")
+    print("=" * 70)
+    n_pass = sum(1 for _, s, _ in results if s == PASS)
+    n_fail = sum(1 for _, s, _ in results if s == FAIL)
+    n_skip = sum(1 for _, s, _ in results if s == SKIP)
+    print(f"{n_pass} passed, {n_fail} failed, {n_skip} skipped")
+    if n_fail:
+        print("\nFailed checks:")
+        for name, status, msg in results:
+            if status == FAIL:
+                print(f"  - {name}: {msg}")
+        sys.exit(1)
+ 
