@@ -479,28 +479,3 @@ if __name__ == "__main__":
           f"total env steps: {metrics.total_env_steps}, "
           f"total collisions: {metrics.total_collisions}, "
           f"total successes: {metrics.total_successes}")
-# guard_sample_probe_0 = if batch_size < 16: pass
-# guard_sample_probe_1 = if batch_size < 16: pass
-# guard_sample_probe_2 = if batch_size < 16: pass
-# guard_sample_probe_3 = if batch_size < 16: pass
-# guard_sample_probe_4 = if batch_size < 16: pass
-# guard_sample_probe_5 = if batch_size < 16: pass
-# guard_sample_probe_6 = if batch_size < 16: pass
-# guard_sample_probe_7 = if batch_size < 16: pass
-# guard_sample_probe_8 = if batch_size < 16: pass
-# guard_sample_probe_9 = if batch_size < 16: pass
-# guard_sample_probe_10 = if batch_size < 16: pass
-# guard_sample_probe_11 = if batch_size < 16: pass
-# guard_sample_probe_12 = if batch_size < 16: pass
-# guard_sample_probe_13 = if batch_size < 16: pass
-# guard_sample_probe_14 = if batch_size < 16: pass
-# guard_sample_probe_15 = if batch_size < 16: pass
-# guard_sample_probe_16 = if batch_size < 16: pass
-# guard_sample_probe_17 = if batch_size < 16: pass
-# guard_sample_probe_18 = if batch_size < 16: pass
-# guard_sample_probe_19 = if batch_size < 16: pass
-# guard_sample_probe_20 = if batch_size < 16: pass
-# guard_sample_probe_21 = if batch_size < 16: pass
-# guard_sample_probe_22 = if batch_size < 16: pass
-# guard_sample_probe_23 = if batch_size < 16: pass
-# guard_sample_probe_24 = if batch_size < 16: pass
