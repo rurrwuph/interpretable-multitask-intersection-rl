@@ -149,3 +149,185 @@ def resolve_rllib_ckpt(path_or_dir):
                 return sub[-1]
     raise FileNotFoundError(f"Cannot find RLlib checkpoint: {path_or_dir}")
 
+
+def load_dqn(ckpt_path):
+    model = MultiTaskDQN().to(DEVICE)
+    ckpt = torch.load(ckpt_path, map_location=DEVICE)
+    model.load_state_dict(ckpt["model_state_dict"])
+    model.eval()
+    return model
+
+
+def load_ppo(ckpt_dir):
+    from ray.rllib.policy.policy import Policy
+    from ray.rllib.algorithms.algorithm import Algorithm
+
+    try:
+        algo = Algorithm.from_checkpoint(ckpt_dir)
+        policy = algo.get_policy("default_policy")
+    except Exception:
+        pol_dir = os.path.join(ckpt_dir, "policies", "default_policy")
+        target_dir = pol_dir if os.path.isdir(pol_dir) else ckpt_dir
+        policy = Policy.from_checkpoint(target_dir)
+    return policy
+
+
+def dqn_action(model, obs, g):
+    with torch.no_grad():
+        obs_t = torch.as_tensor(obs, dtype=torch.float32, device=DEVICE).unsqueeze(0)
+        g_t = torch.as_tensor(g, dtype=torch.float32, device=DEVICE).unsqueeze(0)
+        R = model(obs_t)
+        q = MultiTaskDQN.masked_q(R, g_t)
+        return int(torch.argmax(q, dim=1).item())
+
+
+def ppo_action(policy, obs, g):
+    full_obs = np.concatenate([obs, g], dtype=np.float32)
+    action, _, _ = policy.compute_single_action(full_obs, explore=False)
+    return int(action)
+
+
+def evaluate_agent(algo_name, action_fn, model, envs_by_scenario,
+                   scenarios, total_episodes, max_steps):
+    results = []
+    num_scenarios = len(scenarios)
+
+    for ep in range(total_episodes):
+        sc_name = scenarios[ep % num_scenarios]
+        env = envs_by_scenario[sc_name]
+
+        task_mode = TASKS[ep % len(TASKS)]
+        obs, _ = env.reset(options={"task": task_mode})
+        task_name = env.current_task_name
+        g = env.active_g
+        ego_id = env._current_ego_id
+        target_exit_edge = EGO_ROUTES["west_in"][task_name][-1]
+
+        ep_reward = 0.0
+        ep_len = 0
+        speeds = []
+        success = False
+        collided = False
+        collision_type = "None"
+        last_seen_edge = "west_in"
+
+        for step_i in range(max_steps):
+            speeds.append(float(obs[0]))
+            action = action_fn(model, obs, g)
+
+            next_obs, reward, terminated, truncated, info = env.step(action)
+            ep_reward += reward
+            ep_len += 1
+            obs = next_obs
+
+            curr_edge = info.get("edge", None)
+            if curr_edge:
+                last_seen_edge = curr_edge
+
+            collided_ids = env.flow_env.k.simulation.kernel_api.simulation.getCollidingVehiclesIDList()
+            if ego_id in collided_ids or info.get("is_collision", False):
+                collided = True
+                collision_type = info.get("collision_type", "AT_INTERSECTION")
+                break
+
+            if last_seen_edge == target_exit_edge or info.get("is_success", False):
+                success = True
+                break
+
+            all_ids = env.flow_env.k.vehicle.get_ids()
+            if ego_id not in all_ids:
+                if last_seen_edge == target_exit_edge or (last_seen_edge and last_seen_edge.startswith(":")):
+                    success = True
+                break
+
+            if terminated or truncated:
+                break
+
+        sim_step = env.flow_env.sim_params.sim_step
+        travel_time = ep_len * sim_step if success else None
+        avg_speed = float(np.mean(speeds)) if speeds else 0.0
+        outcome = "SUCCESS" if success else ("COLLISION (" + collision_type + ")" if collided else "TIMEOUT")
+
+        results.append({
+            "algorithm": algo_name,
+            "scenario": sc_name,
+            "task": task_name,
+            "episode": ep + 1,
+            "reward": ep_reward,
+            "length": ep_len,
+            "success": success,
+            "collision": collided,
+            "collision_type": collision_type,
+            "outcome": outcome,
+            "travel_time_s": travel_time,
+            "avg_speed_mps": avg_speed,
+        })
+
+        if (ep + 1) % 50 == 0 or (ep + 1) == total_episodes:
+            succ_pct = np.mean([r["success"] for r in results]) * 100
+            coll_pct = np.mean([r["collision"] for r in results]) * 100
+            valid_tt = [r["travel_time_s"] for r in results if r["travel_time_s"] is not None]
+            m_tt = f"{np.mean(valid_tt):.2f}s" if valid_tt else "N/A"
+            print(f"  [{algo_name}] Ep {ep+1:4d}/{total_episodes} | "
+                  f"Succ: {succ_pct:5.1f}% | Coll: {coll_pct:5.1f}% | AvgTime: {m_tt:>6} | "
+                  f"Last: {task_name:8s} -> {outcome}")
+
+    return results
+
+
+def print_diagnostic_breakdown(results):
+    print("\n" + "=" * 90)
+    print("COMPARATIVE EVALUATION SUMMARY (OVER 1000 EPISODES)")
+    print("=" * 90)
+    header = f"{'Task':<10} {'Algorithm':<16} {'Episodes':>8} {'Success':>9} {'Collision':>10} {'Timeout':>9} {'AvgTime(s)':>11} {'MeanSpeed':>11}"
+    print(header)
+    print("-" * len(header))
+
+    algos = sorted(list(set(r["algorithm"] for r in results)))
+
+    for task in TASKS:
+        for algo in algos:
+            subset = [r for r in results if r["task"] == task and r["algorithm"] == algo]
+            if not subset:
+                continue
+            succ = np.mean([r["success"] for r in subset]) * 100
+            coll = np.mean([r["collision"] for r in subset]) * 100
+            tout = 100.0 - (succ + coll)
+            tt = [r["travel_time_s"] for r in subset if r["travel_time_s"] is not None]
+            avg_t = f"{np.mean(tt):.2f}" if tt else "N/A"
+            spds = [r["avg_speed_mps"] for r in subset]
+            avg_v = f"{np.mean(spds):.2f} m/s" if spds else "N/A"
+            print(f"{task:<10} {algo:<16} {len(subset):8d} {succ:8.1f}% {coll:9.1f}% {tout:8.1f}% {avg_t:>11} {avg_v:>11}")
+
+    print("-" * len(header))
+
+# timestep_log_probe_0 = print('eval_ts', 0)
+# timestep_log_probe_1 = print('eval_ts', 1)
+# timestep_log_probe_2 = print('eval_ts', 2)
+# timestep_log_probe_3 = print('eval_ts', 3)
+# timestep_log_probe_4 = print('eval_ts', 4)
+# timestep_log_probe_5 = print('eval_ts', 5)
+# timestep_log_probe_6 = print('eval_ts', 6)
+# timestep_log_probe_7 = print('eval_ts', 7)
+# timestep_log_probe_8 = print('eval_ts', 8)
+# timestep_log_probe_9 = print('eval_ts', 9)
+# timestep_log_probe_10 = print('eval_ts', 10)
+# timestep_log_probe_11 = print('eval_ts', 11)
+# timestep_log_probe_12 = print('eval_ts', 12)
+# timestep_log_probe_13 = print('eval_ts', 13)
+# timestep_log_probe_14 = print('eval_ts', 14)
+# timestep_log_probe_15 = print('eval_ts', 15)
+# timestep_log_probe_16 = print('eval_ts', 16)
+# timestep_log_probe_17 = print('eval_ts', 17)
+# timestep_log_probe_18 = print('eval_ts', 18)
+# timestep_log_probe_19 = print('eval_ts', 19)
+# timestep_log_probe_20 = print('eval_ts', 20)
+# timestep_log_probe_21 = print('eval_ts', 21)
+# timestep_log_probe_22 = print('eval_ts', 22)
+# timestep_log_probe_23 = print('eval_ts', 23)
+# timestep_log_probe_24 = print('eval_ts', 24)
+# timestep_log_probe_25 = print('eval_ts', 25)
+# timestep_log_probe_26 = print('eval_ts', 26)
+# timestep_log_probe_27 = print('eval_ts', 27)
+# timestep_log_probe_28 = print('eval_ts', 28)
+# timestep_log_probe_29 = print('eval_ts', 29)
