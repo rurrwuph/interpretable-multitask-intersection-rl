@@ -300,3 +300,154 @@ def print_diagnostic_breakdown(results):
             print(f"{task:<10} {algo:<16} {len(subset):8d} {succ:8.1f}% {coll:9.1f}% {tout:8.1f}% {avg_t:>11} {avg_v:>11}")
 
     print("-" * len(header))
+    for algo in algos:
+        subset = [r for r in results if r["algorithm"] == algo]
+        succ = np.mean([r["success"] for r in subset]) * 100
+        coll = np.mean([r["collision"] for r in subset]) * 100
+        tout = 100.0 - (succ + coll)
+        tt = [r["travel_time_s"] for r in subset if r["travel_time_s"] is not None]
+        avg_t = f"{np.mean(tt):.2f}" if tt else "N/A"
+        spds = [r["avg_speed_mps"] for r in subset]
+        avg_v = f"{np.mean(spds):.2f} m/s" if spds else "N/A"
+        print(f"{'OVERALL':<10} {algo:<16} {len(subset):8d} {succ:8.1f}% {coll:9.1f}% {tout:8.1f}% {avg_t:>11} {avg_v:>11}")
+    print("=" * 90 + "\n")
+
+
+def plot_paper_style_results(results, save_dir):
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError:
+        print("[WARN] matplotlib not found; skipping graph generation.")
+        return
+
+    os.makedirs(save_dir, exist_ok=True)
+    algos = sorted(list(set(r["algorithm"] for r in results)))
+    task_display = ["Turning Left", "Going Straight", "Turning Right"]
+    task_keys = ["left", "straight", "right"]
+
+    colors = {
+        "left": "#7ea6e0",       # Light blue (matching paper)
+        "straight": "#f9f871",   # Yellow (matching paper)
+        "right": "#f28e8e",      # Coral red (matching paper)
+    }
+
+    # -------------------------------------------------------------
+    # Figure 1: Success Rate (Horizontal Bar Chart matching Fig. 4)
+    # -------------------------------------------------------------
+    fig, ax = plt.subplots(figsize=(7, 6))
+    y = np.arange(len(algos))
+    height = 0.22
+
+    for i, t_key in enumerate(task_keys):
+        rates = []
+        for algo in algos:
+            subset = [r for r in results if r["algorithm"] == algo and r["task"] == t_key]
+            val = (np.mean([r["success"] for r in subset]) * 100) if subset else 0.0
+            rates.append(val)
+        
+        offset = (i - 1) * height
+        rects = ax.barh(y + offset, rates, height, label=task_display[i], color=colors[t_key], edgecolor="gray")
+        
+        for rect in rects:
+            w = rect.get_width()
+            ax.annotate(f"{w:.1f}%",
+                        xy=(w, rect.get_y() + rect.get_height() / 2),
+                        xytext=(3, 0), textcoords="offset points",
+                        ha="left", va="center", fontsize=9)
+
+    ax.set_yticks(y)
+    ax.set_yticklabels(algos, fontweight="bold")
+    ax.set_xlim(0, 115)
+    ax.set_xlabel("Success Rate (%)")
+    ax.set_title("Fig. 4: Success rate of different algorithms for all tasks (over 1000 episodes)", fontsize=11)
+    ax.legend(loc="lower left", framealpha=0.9)
+    ax.grid(axis="x", linestyle="--", alpha=0.4)
+    fig.tight_layout()
+    fig.savefig(os.path.join(save_dir, "fig4_success_rate.png"), dpi=300)
+    plt.close(fig)
+
+    # -------------------------------------------------------------
+    # Figure 2: Average Time (Horizontal Bar Chart matching Fig. 5)
+    # -------------------------------------------------------------
+    fig, ax = plt.subplots(figsize=(7, 6))
+    for i, t_key in enumerate(task_keys):
+        times = []
+        for algo in algos:
+            subset = [r for r in results if r["algorithm"] == algo and r["task"] == t_key]
+            tt = [r["travel_time_s"] for r in subset if r["travel_time_s"] is not None]
+            times.append(np.mean(tt) if tt else 0.0)
+
+        offset = (i - 1) * height
+        rects = ax.barh(y + offset, times, height, label=task_display[i], color=colors[t_key], edgecolor="gray")
+
+        for rect in rects:
+            w = rect.get_width()
+            ax.annotate(f"{w:.2f}",
+                        xy=(w, rect.get_y() + rect.get_height() / 2),
+                        xytext=(3, 0), textcoords="offset points",
+                        ha="left", va="center", fontsize=9)
+
+    ax.set_yticks(y)
+    ax.set_yticklabels(algos, fontweight="bold")
+    max_t = max([r["travel_time_s"] for r in results if r["travel_time_s"] is not None] or [50.0])
+    ax.set_xlim(0, max_t * 1.25)
+    ax.set_xlabel("Average Time (s)")
+    ax.set_title("Fig. 5: Average time of different algorithms for all tasks (over 1000 episodes)", fontsize=11)
+    ax.legend(loc="lower right", framealpha=0.9)
+    ax.grid(axis="x", linestyle="--", alpha=0.4)
+    fig.tight_layout()
+    fig.savefig(os.path.join(save_dir, "fig5_average_time.png"), dpi=300)
+    plt.close(fig)
+
+    print(f"[PLOTS SAVED] Fig. 4 and Fig. 5 written to: {save_dir}")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dqn", type=str, required=True, help="DQN checkpoint folder or .pt")
+    parser.add_argument("--ppo", type=str, required=True, help="RLlib PPO experiment directory")
+    parser.add_argument("--episodes", type=int, default=1000, help="Total episodes per algorithm")
+    parser.add_argument("--max_steps", type=int, default=800, help="Max steps per episode")
+    args = parser.parse_args()
+
+    dqn_path = resolve_dqn_ckpt(args.dqn)
+    ppo_path = resolve_rllib_ckpt(args.ppo)
+
+    print(f"[INIT] Pre-building simulation environments across all 9 scenarios...")
+    envs = {sc: build_stochastic_scenario_env(sc) for sc in ALL_SCENARIOS}
+
+    all_results = []
+    try:
+        print(f"\n[RUNNING] Multi-Task DQN Evaluation ({os.path.basename(dqn_path)}) over {args.episodes} episodes...")
+        dqn_net = load_dqn(dqn_path)
+        all_results.extend(evaluate_agent(
+            "Multi-Task DQN", dqn_action, dqn_net, envs,
+            ALL_SCENARIOS, args.episodes, args.max_steps
+        ))
+
+        print(f"\n[RUNNING] RLlib PPO Evaluation ({os.path.basename(ppo_path)}) over {args.episodes} episodes...")
+        ppo_pol = load_ppo(ppo_path)
+        all_results.extend(evaluate_agent(
+            "PPO", ppo_action, ppo_pol, envs,
+            ALL_SCENARIOS, args.episodes, args.max_steps
+        ))
+    finally:
+        for sc_env in envs.values():
+            try:
+                sc_env.flow_env.terminate()
+            except Exception:
+                pass
+
+    print_diagnostic_breakdown(all_results)
+
+    out_dir = os.path.join("eval_results", time.strftime("eval_%Y%m%d_%H%M%S"))
+    os.makedirs(out_dir, exist_ok=True)
+    csv_file = os.path.join(out_dir, "evaluation_data_1000ep.csv")
+    with open(csv_file, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(all_results[0].keys()))
+        writer.writeheader()
+        writer.writerows(all_results)
+
+    plot_paper_style_results(all_results, out_dir)
