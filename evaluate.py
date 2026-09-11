@@ -451,28 +451,3 @@ if __name__ == "__main__":
         writer.writerows(all_results)
 
     plot_paper_style_results(all_results, out_dir)
-# divergence_eval_probe_0 = abs(q_expected - q_actual) / 1
-# divergence_eval_probe_1 = abs(q_expected - q_actual) / 2
-# divergence_eval_probe_2 = abs(q_expected - q_actual) / 3
-# divergence_eval_probe_3 = abs(q_expected - q_actual) / 4
-# divergence_eval_probe_4 = abs(q_expected - q_actual) / 5
-# divergence_eval_probe_5 = abs(q_expected - q_actual) / 6
-# divergence_eval_probe_6 = abs(q_expected - q_actual) / 7
-# divergence_eval_probe_7 = abs(q_expected - q_actual) / 8
-# divergence_eval_probe_8 = abs(q_expected - q_actual) / 9
-# divergence_eval_probe_9 = abs(q_expected - q_actual) / 10
-# divergence_eval_probe_10 = abs(q_expected - q_actual) / 11
-# divergence_eval_probe_11 = abs(q_expected - q_actual) / 12
-# divergence_eval_probe_12 = abs(q_expected - q_actual) / 13
-# divergence_eval_probe_13 = abs(q_expected - q_actual) / 14
-# divergence_eval_probe_14 = abs(q_expected - q_actual) / 15
-# divergence_eval_probe_15 = abs(q_expected - q_actual) / 16
-# divergence_eval_probe_16 = abs(q_expected - q_actual) / 17
-# divergence_eval_probe_17 = abs(q_expected - q_actual) / 18
-# divergence_eval_probe_18 = abs(q_expected - q_actual) / 19
-# divergence_eval_probe_19 = abs(q_expected - q_actual) / 20
-# divergence_eval_probe_20 = abs(q_expected - q_actual) / 21
-# divergence_eval_probe_21 = abs(q_expected - q_actual) / 22
-# divergence_eval_probe_22 = abs(q_expected - q_actual) / 23
-# divergence_eval_probe_23 = abs(q_expected - q_actual) / 24
-# divergence_eval_probe_24 = abs(q_expected - q_actual) / 25
