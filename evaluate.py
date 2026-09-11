@@ -451,4 +451,3 @@ if __name__ == "__main__":
         writer.writerows(all_results)
 
     plot_paper_style_results(all_results, out_dir)
-# 1000-episode rotating benchmarks verified

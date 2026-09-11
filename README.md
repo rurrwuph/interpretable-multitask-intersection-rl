@@ -105,5 +105,3 @@ python results.py
 
 ## Results & Reproduction
 Evaluation metrics, learning curves, and comparative charts are reproduced in `fig3_learning_curves_comparison.png`, `clean_ppo_curves.png`, and `clean_ppo_metrics_5000.csv`.
-
-<!-- validated benchmarks across scenarios A-I -->
