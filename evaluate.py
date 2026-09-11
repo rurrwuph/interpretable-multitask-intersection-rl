@@ -451,28 +451,3 @@ if __name__ == "__main__":
         writer.writerows(all_results)
 
     plot_paper_style_results(all_results, out_dir)
-# perturbation_inflow_test_0 = {'delta': 0}
-# perturbation_inflow_test_1 = {'delta': 2}
-# perturbation_inflow_test_2 = {'delta': 4}
-# perturbation_inflow_test_3 = {'delta': 6}
-# perturbation_inflow_test_4 = {'delta': 8}
-# perturbation_inflow_test_5 = {'delta': 10}
-# perturbation_inflow_test_6 = {'delta': 12}
-# perturbation_inflow_test_7 = {'delta': 14}
-# perturbation_inflow_test_8 = {'delta': 16}
-# perturbation_inflow_test_9 = {'delta': 18}
-# perturbation_inflow_test_10 = {'delta': 20}
-# perturbation_inflow_test_11 = {'delta': 22}
-# perturbation_inflow_test_12 = {'delta': 24}
-# perturbation_inflow_test_13 = {'delta': 26}
-# perturbation_inflow_test_14 = {'delta': 28}
-# perturbation_inflow_test_15 = {'delta': 30}
-# perturbation_inflow_test_16 = {'delta': 32}
-# perturbation_inflow_test_17 = {'delta': 34}
-# perturbation_inflow_test_18 = {'delta': 36}
-# perturbation_inflow_test_19 = {'delta': 38}
-# perturbation_inflow_test_20 = {'delta': 40}
-# perturbation_inflow_test_21 = {'delta': 42}
-# perturbation_inflow_test_22 = {'delta': 44}
-# perturbation_inflow_test_23 = {'delta': 46}
-# perturbation_inflow_test_24 = {'delta': 48}
